@@ -1,0 +1,23 @@
+# Streamlit settings for the upload app. maxUploadSize is per file, in MB;
+# keep it in step with app.max_file_mb in config.yaml.
+[server]
+maxUploadSize = 20
+# On by default; set here so it is never switched off by accident.
+enableXsrfProtection = true
+# Stops ordinary source hot reload, but it is not a security boundary:
+# Streamlit always polls .streamlit/config.toml and .streamlit/secrets.toml
+# whatever this says, so a compromised render child (same user) can edit
+# server code and then touch either file to force a live reload, getting its
+# changes into the running server without a restart. Local developers can
+# pass --server.fileWatcherType auto to get source reloading back.
+fileWatcherType = "none"
+
+[browser]
+gatherUsageStats = false
+
+[client]
+# Visitors see a generic message instead of tracebacks and server paths; the
+# details still go to the server log.
+showErrorDetails = "none"
+# Hides developer options in the app's menu.
+toolbarMode = "viewer"

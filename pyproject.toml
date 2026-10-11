@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "local-document-pipeline"
+version = "0.5.0"
+description = "Upload app that splits PDF batches into documents and extracts fields to Excel, with optional AI models"
+license = "AGPL-3.0-only"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+dependencies = [
+  # PyMuPDF 1.28.2 bundles MuPDF 1.28.2, past the 2026 MuPDF memory-safety
+  # fixes (CVE-2026-25556, CVE-2026-3308); it parses untrusted uploads.
+  "PyMuPDF>=1.28.2,<2",
+  # 12.3.0 fixes CVE-2026-59204 and CVE-2026-59205.
+  "Pillow>=12.3,<13",
+  "ImageHash>=4.3,<5",
+  "openpyxl>=3.1,<4",
+  "openai>=1.40,<3",
+  # thinking_level (Gemini 3) needs a recent SDK; 1.75 is the tested version.
+  "google-genai>=1.75,<2",
+  "PyYAML>=6,<7",
+]
+
+[project.optional-dependencies]
+# pandas 3.0 wheels are new enough that Windows Smart App Control blocks
+# their DLLs; 2.x loads normally. The UI uses width="stretch" on buttons,
+# which older Streamlit lacks; 1.65 is the tested version. Sign-in
+# (st.login) needs Authlib; 1.6.5 fixes CVE-2025-59420 and CVE-2025-61920.
+app = ["streamlit>=1.65,<2", "pandas>=2.2,<3", "Authlib>=1.6.5,<2"]
+# uv writes the hashed locks (requirements.txt for Community Cloud,
+# requirements-dev.txt for dev.py); pip-audit checks them (see the README).
+# hatchling and editables (the editable-install build) are here so dev.py
+# installs everything from the lock; detect-secrets lets the pre-commit hook
+# scan for secrets.
+dev = [
+  # 9.0.3 fixes PYSEC-2026-1845.
+  "pytest>=9.0.3,<10",
+  "uv>=0.12,<1",
+  "pip-audit>=2.10,<3",
+  "hatchling>=1.27,<2",
+  "editables>=0.5,<1",
+  "detect-secrets>=1.5,<2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/doc_pipeline"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

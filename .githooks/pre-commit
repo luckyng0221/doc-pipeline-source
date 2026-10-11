@@ -1,0 +1,49 @@
+#!/bin/sh
+# GitHub secret scanning isn't available for this private repo, so scan here.
+# check_staged.py checks the staged content for documents and this project's key
+# formats; detect-secrets then scans the staged files against a COPY of the staged
+# baseline, so the working-tree .secrets.baseline is never modified.
+# Any failing git call blocks the commit.
+# These would change how pathspecs are read.
+unset GIT_LITERAL_PATHSPECS GIT_GLOB_PATHSPECS GIT_NOGLOB_PATHSPECS GIT_ICASE_PATHSPECS
+. "$(dirname -- "$0")/find-python.sh" || exit 1
+tmp="" tmpbase="" stale=""
+trap 'rm -f "$tmp" "$tmpbase" "$stale"' EXIT
+$py -I .githooks/check_staged.py --staged || exit 1
+tmp=$(mktemp) || exit 1
+tmpbase=$(mktemp) || exit 1
+stale=$(mktemp) || exit 1
+# The baseline file itself is left out: its hashes look like secrets.
+git diff --cached --name-only -z --diff-filter=ACMRT -- ':(top,exclude).secrets.baseline' > "$tmp" || { echo "git failed; the commit is blocked."; exit 1; }
+# The scan reads the working tree, so it must match what is staged. Literal
+# pathspecs here, so a name like ":(foo)x.py" isn't read as pathspec magic.
+partial=$(xargs -0 -r git -c core.quotepath=off --literal-pathspecs diff --name-only -- < "$tmp") || { echo "git failed; the commit is blocked."; exit 1; }
+if [ -n "$partial" ]; then
+    echo "Stage or stash the remaining changes in these files first:"
+    echo "$partial"
+    exit 1
+fi
+# The staged baseline, so a missing one blocks the commit.
+git cat-file blob :.secrets.baseline > "$tmpbase" 2>/dev/null || { echo ".secrets.baseline isn't staged or committed; the commit is blocked."; exit 1; }
+# --no-verify: never send a suspected secret to its provider to test it.
+# --disable-filter: detect-secrets otherwise skips whole files it thinks are not text (.svg),
+# swagger files or lock files (poetry.lock).
+# -I: a staged file named like a Python module can't shadow the real one.
+# xargs turns every exit code 1-125 into 123, so the wrapper records exit 3
+# (nothing new found, baseline rewritten) and passes only 0 and 3. Exit 3 counts
+# only if the temp baseline really changed; on Windows an abort also exits 3.
+export DOC_PIPELINE_NO_SETUP=1 hook_py="$py" hook_base="$tmpbase" hook_stale="$stale"
+xargs -0 -r sh -c '
+    before=$(cksum < "$hook_base")
+    $hook_py -I dev.py detect_secrets.pre_commit_hook --no-verify --disable-filter detect_secrets.filters.heuristic.is_non_text_file --disable-filter detect_secrets.filters.heuristic.is_swagger_file --disable-filter detect_secrets.filters.heuristic.is_lock_file --baseline "$hook_base" -- "$@"
+    rc=$?
+    if [ "$rc" -eq 3 ] && [ "$(cksum < "$hook_base")" != "$before" ]; then echo 3 > "$hook_stale"; exit 0; fi
+    exit "$rc"
+' sh < "$tmp" || { echo "The secret scan blocked the commit."; exit 1; }
+if [ -s "$stale" ]; then
+    echo "Warning: .secrets.baseline is out of date (line numbers moved, a recorded secret was removed, or the"
+    echo "detect-secrets version changed). The commit is allowed, but ask the user to refresh it:"
+    echo "  python3 dev.py detect_secrets scan --no-verify --baseline .secrets.baseline"
+    echo "and check git diff .secrets.baseline before committing the new baseline."
+fi
+exit 0

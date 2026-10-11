@@ -1,0 +1,165 @@
+# Settings for the upload app (streamlit run streamlit_app.py).
+language: auto
+# Default for "How dates are written" in the app: day_first (02/12/2024 is
+# 2 December), month_first, or unknown.
+date_order: day_first
+
+# Rendering, model batching, retries, and duplicate matching. The app sets
+# the file-size and page limits from the app section below.
+limits:
+  render_dpi: 150
+  jpeg_quality: 82
+  # Each PDF is rendered in a disposable child process (POSIX only; other
+  # platforms render in-process). A child that takes longer than this is
+  # killed and only its file fails.
+  render_timeout_seconds: 120
+  # The most memory (address space) one render child may hold, so a bloated
+  # PDF cannot take the server down.
+  render_child_memory_mb: 1024
+  boundary_batch_pages: 6
+  boundary_pdf_batch_pages: 40
+  boundary_min_confidence: 0.65
+  extraction_batch_pages: 12
+  # Documents read at the same time (the app's "Documents read at once").
+  # Free API tiers with low rate limits may need 1 or 2.
+  extraction_workers: 3
+  retry_attempts: 4
+  retry_base_seconds: 10.0
+  dhash_max_distance: 6
+  visual_similarity_threshold: 0.85
+
+# Page splitting: rules read the PDF text layer ("Page 1 of 3" markers and
+# title lines such as INVOICE / OFFICIAL RECEIPT) and skip blank pages. Only
+# pages the rules cannot decide go to the page-splitting model, or are guessed
+# when there is none. The app lets users change blank_pages and the fallback.
+boundary_rules:
+  enabled: true
+  # ignore: blank pages are never sent to a model and do not split documents.
+  # separator: a blank page also starts a new document after it (use this when
+  # blank sheets are inserted between documents, not for duplex blank backs).
+  blank_pages: ignore
+  blank_max_ink: 0.005
+  # titles:  # optional; replaces the built-in title lines
+  #   invoice: [INVOICE, TAX INVOICE]
+  #   receipt: [RECEIPT, OFFICIAL RECEIPT]
+
+# Upload app settings. Users pick their own models, keys, and fields in the
+# app; keys typed into it are kept in server memory for that user's session only.
+app:
+  max_files: 5
+  max_file_mb: 20
+  max_pages: 50
+  # Session folders (uploads, results, duplicate registry) older than this
+  # are deleted.
+  workspace_ttl_minutes: 120
+  # Runs across everyone using the server: how many work at once, and how
+  # many more may wait for a free slot. Each user has at most one run. More
+  # visitors are told the server is busy.
+  max_concurrent_runs: 2
+  max_waiting_runs: 4
+  # A run stops at this time limit: the files it finished are kept and written
+  # to the workbook, the rest are reported as not run. The Cancel button stops
+  # a run the same way: the run stops before the next model request, and one
+  # already in flight finishes first (up to the provider timeout). Must stay
+  # below workspace_ttl_minutes.
+  run_timeout_minutes: 60
+  # Runs each visitor may start per sliding hour and day, on top of the
+  # one-run-at-a-time rule above. Counted per account when signed in and per
+  # IP address when not (IPv6 per /64 network), so people behind one office
+  # or carrier network share one count. In-memory counters, so a server
+  # restart resets them.
+  max_runs_per_hour: 10
+  max_runs_per_day: 40
+  # Test models presses per visitor per sliding hour, under its own counter:
+  # each press sends one tiny request per configured model, and it never uses
+  # up the run limits above.
+  max_model_tests_per_hour: 20
+  # AGPL section 13: a public address where this deployed version's exact
+  # source can be read. While set, every page shows a "Source code
+  # (AGPL-3.0)" link; empty shows only the licence line. The repository is
+  # private, so linking it does not satisfy the AGPL: publish the source
+  # first, then set the address here.
+  source_url: "https://github.com/luckyng0221/doc-pipeline-source"
+  # Suggestions in the model picker; users can also type any other model ID.
+  models:
+    gemini: [gemini-3.8-flash, gemini-2.5-flash, gemini-2.5-pro]
+    openai: [gpt-4o-mini, gpt-4.1-mini, gpt-5-mini]
+    glm: [glm-4.6v-flash, glm-4.5v]
+  # List prices in USD per 1M tokens, for the estimated cost shown after a
+  # run. Thinking tokens count as output. Cached-token, batch, and free-tier
+  # discounts are ignored, so the estimate can be a little high. Checked
+  # 2026-10-03; update these when the providers change their prices. A model
+  # not listed here shows its tokens with "price not set".
+  prices:
+    # Introductory rate until 2026-12-31; 1.50 / 7.50 from 2027-01-01.
+    gemini-3.8-flash: {input: 0.75, output: 3.75}
+    gemini-2.5-flash: {input: 0.30, output: 2.50}
+    # Prompts up to 200k tokens (one document's pages stay far below that).
+    gemini-2.5-pro: {input: 1.25, output: 10.00}
+    gpt-4o-mini: {input: 0.15, output: 0.60}
+    gpt-4.1-mini: {input: 0.40, output: 1.60}
+    gpt-5-mini: {input: 0.25, output: 2.00}
+    # Free on Z.ai.
+    glm-4.6v-flash: {input: 0, output: 0}
+    glm-4.5v: {input: 0.60, output: 1.80}
+  glm_endpoints:
+    "Z.ai (international)": https://api.z.ai/api/paas/v4/
+    "BigModel (China)": https://open.bigmodel.cn/api/paas/v4/
+  # Starting rows of the field editor. keywords are the labels printed next
+  # to the value; they drive extraction when no API key is entered.
+  field_presets:
+    - name: Document Number
+      include: true
+      required: true
+      duplicate_key: true
+      keywords: [Invoice No, Invoice Number, Inv No, Receipt No, OR No, Document No, Doc No, Bill No, Reference No, Ref No]
+      description: Invoice, receipt, or document reference number.
+    - name: Document Date
+      type: date
+      include: true
+      required: true
+      duplicate_key: true
+      keywords: [Invoice Date, Receipt Date, Document Date, Date, Tarikh]
+      description: Issue or transaction date.
+    - name: Vendor Name
+      include: true
+      required: true
+      duplicate_key: true
+      keywords: [Vendor, Supplier, Seller]
+      description: Supplier, merchant, or company that issued the document.
+    - name: Customer Name
+      include: true
+      keywords: [Bill To, Sold To, Customer, Debtor, Received From]
+      description: Customer or party the document is addressed to.
+    - name: Currency
+      include: true
+      keywords: [Currency]
+      description: Currency code or symbol shown next to the total.
+    - name: Tax / SST Amount
+      type: decimal
+      include: true
+      keywords: [SST, Service Tax, Sales Tax, GST, Tax Amount, Tax]
+      description: Total tax amount (SST, GST, or VAT).
+    - name: Total Amount
+      type: decimal
+      include: true
+      required: true
+      duplicate_key: true
+      keywords: [Grand Total, Total Amount, Final Total, Amount Due, Total Payable, Total]
+      description: Final amount paid or due, excluding individual line items.
+    - name: PO Number
+      keywords: [PO No, P.O. No, PO Number, Purchase Order No]
+      description: Purchase order number referenced on the document.
+    - name: Payment Terms
+      keywords: [Payment Terms, Terms]
+      description: Payment terms, such as 30 days.
+    - name: Due Date
+      type: date
+      keywords: [Due Date, Payment Due]
+      description: Date payment is due.
+    - name: Bank Account No
+      keywords: [Bank Account No, Account No, A/C No]
+      description: Supplier bank account number for payment.
+    - name: Document Type
+      verify_in_text: false
+      description: Classify as invoice, receipt, statement, credit note, debit note, delivery order, purchase order, or quotation.

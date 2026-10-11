@@ -1,0 +1,7 @@
+#!/bin/sh
+# Checks the commits a push would add (those not yet on any remote-tracking ref) in full:
+# documents, key patterns, commit messages, the baseline's settings, then detect-secrets.
+# Git passes the refs on stdin, which check_staged.py reads. Any failure blocks.
+unset GIT_LITERAL_PATHSPECS GIT_GLOB_PATHSPECS GIT_NOGLOB_PATHSPECS GIT_ICASE_PATHSPECS
+. "$(dirname -- "$0")/find-python.sh" || exit 1
+$py -I .githooks/check_staged.py --push || exit 1

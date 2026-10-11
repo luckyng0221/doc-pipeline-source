@@ -1,0 +1,6 @@
+#!/bin/sh
+# Blocks a commit message that contains a key-shaped string. $1 is the message file.
+# Any failure blocks.
+unset GIT_LITERAL_PATHSPECS GIT_GLOB_PATHSPECS GIT_NOGLOB_PATHSPECS GIT_ICASE_PATHSPECS
+. "$(dirname -- "$0")/find-python.sh" || exit 1
+$py -I .githooks/check_staged.py --message "$1" || exit 1
