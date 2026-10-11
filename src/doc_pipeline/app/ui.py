@@ -743,7 +743,8 @@ def _visitor(source_url: str) -> Visitor | None:
         st.title(APP_TITLE)
         st.error(
             "Sign-in isn't set up for this app, so it can't be used yet. The app's owner needs to add an "
-            "[auth] section to its secrets (see the README)."
+            "[auth] section to its secrets, or open it to visitors without sign-in with `allow_anonymous = true` "
+            "under `[access]` (see the README)."
         )
         _source_offer(source_url)
         return None

@@ -951,6 +951,8 @@ def test_without_sign_in_set_up_the_app_refuses_to_run(tmp_path: Path, monkeypat
 
     assert not app.exception
     assert any("Sign-in isn't set up" in error.value for error in app.error)
+    # The owner is told about both ways to open the app.
+    assert any("allow_anonymous = true" in error.value for error in app.error)
     assert not app.get("file_uploader")
     # Nothing is stored for a visitor who can't use the app.
     assert not list(tmp_path.iterdir())

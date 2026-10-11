@@ -142,7 +142,14 @@ The app is built to be shared (for example as a public beta):
 
    Microsoft sign-in works the same way under `[auth.microsoft]`, with a tenant-specific `server_metadata_url` (`https://login.microsoftonline.com/<tenant>/v2.0/.well-known/openid-configuration`). The allowlist only accepts emails the provider marks as verified, and Microsoft usually does not, so use Google when you set an allowlist.
 
-   To also let people use the app without an account, add `allow_anonymous = true` to the `[access]` section: visitors who are not signed in can then upload and run too, with their runs counted per IP address. Sign-in stays available and unchanged, and the allowlist still guards signed-in accounts only — an anonymous visitor has no email to check it against, so it is not applied to them. Three things to know before turning it on:
+   To also let people use the app without an account, add `allow_anonymous = true` to the `[access]` section, as its own section (a line appended below another `[section]` belongs to that section) and with `true` unquoted:
+
+   ```toml
+   [access]
+   allow_anonymous = true
+   ```
+
+   Visitors who are not signed in can then upload and run too, with their runs counted per IP address. This works with or without an `[auth]` section: without one, nobody signs in. Where sign-in is set up, it stays available and unchanged, and the allowlist still guards signed-in accounts only — an anonymous visitor has no email to check it against, so it is not applied to them. Three things to know before turning it on:
 
    - **Per-IP counting is only sound behind a proxy that appends the client address to `X-Forwarded-For`.** Community Cloud is expected to do this, but verify it before turning `allow_anonymous` on. The app trusts the last entry, so behind such a proxy a client's own header cannot change its key. With the app exposed directly — no appending proxy in front — a client can send whatever header it likes and pick a fresh `ip:` key per request, so do not open the anonymous tier without one.
    - **Check once after deploying** that the proxy's header really reaches the app (`st.context.headers`) and carries the client address last: load the app signed out and try it. A missing or unusable header shows up in the logs as `run_refused reason=no_client_ip` at WARNING (and the visitor is asked to sign in) — but a *constant* last entry does not: if two different clients show the same last `X-Forwarded-For` entry, a second proxy sits in front of the one that appends, and every visitor shares one key. Then confirm a client cannot forge its own key: set `app.max_model_tests_per_hour` to 1, use **Test models** once, and from a new tab send a request with a forged `X-Forwarded-For` header — a plain browser tab cannot set request headers, so use a browser extension or tool that can (for example a header-modifying extension). The forged address must still be refused (`run_refused reason=test_quota`); if it gets a fresh test instead, the last entry is client-controlled and `allow_anonymous` must stay off.
